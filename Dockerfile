@@ -10,5 +10,7 @@ COPY email_agent ./email_agent
 
 RUN pip install --no-cache-dir .
 
+EXPOSE 8765
+
 ENTRYPOINT ["email-agent"]
 CMD ["summarize", "--date", "today"]

@@ -88,6 +88,18 @@ docker run --rm --env-file .env.local -v "${PWD}/outputs:/app/outputs" email-age
 docker run --rm --env-file .env.local -v "${PWD}/outputs:/app/outputs" email-agent summarize --date today --no-ai
 ```
 
+启动可视化网站：
+
+```powershell
+docker run --rm --env-file .env.local -p 8765:8765 -v "${PWD}/outputs:/app/outputs" email-agent web --host 0.0.0.0 --port 8765
+```
+
+然后打开：
+
+```text
+http://127.0.0.1:8765
+```
+
 如果 `python` 命令不可用，也可以用可用的 Python 解释器运行：
 
 ```powershell
@@ -111,6 +123,20 @@ python -m email_agent summarize --date today --no-ai
 ```powershell
 python -m email_agent summarize --date today --no-save
 ```
+
+## 启动可视化网站
+
+```powershell
+python -m email_agent web --port 8765
+```
+
+打开：
+
+```text
+http://127.0.0.1:8765
+```
+
+网页中可以选择日期、生成简报、查看待办任务、风险异常、邮件列表和原始 Markdown。
 
 ## 输出结构
 

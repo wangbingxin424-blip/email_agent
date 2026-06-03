@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>邮件简报 Agent</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">M</div>
+          <div>
+            <h1>邮件简报 Agent</h1>
+            <p>本地只读邮件工作台</p>
+          </div>
+        </div>
+        <nav class="nav">
+          <button class="nav-item active" type="button">今日简报</button>
+          <button class="nav-item" type="button">邮件列表</button>
+          <button class="nav-item" type="button">设置</button>
+        </nav>
+        <div class="connection">
+          <div class="status-dot"></div>
+          <div>
+            <strong id="mailStatus">检查邮箱配置</strong>
+            <span id="modelStatus">检查模型配置</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <h2>今日简报</h2>
+            <p id="subtitle">读取 QQ 邮箱，生成今天主要发生的事情。</p>
+          </div>
+          <form id="summaryForm" class="controls">
+            <button class="segmented active" type="button" id="todayButton">今天</button>
+            <label class="date-field">
+              <span>选择日期</span>
+              <input id="dateInput" type="date" />
+            </label>
+            <label class="check-field">
+              <input id="noAiInput" type="checkbox" />
+              <span>只读邮件</span>
+            </label>
+            <button class="primary" type="submit" id="runButton">生成今日简报</button>
+          </form>
+        </header>
+
+        <section class="kpis" aria-label="关键指标">
+          <article>
+            <span>邮件</span>
+            <strong id="emailCount">-</strong>
+            <p>当天读取数量</p>
+          </article>
+          <article>
+            <span>重要</span>
+            <strong id="importantCount">-</strong>
+            <p>模型提取事项</p>
+          </article>
+          <article>
+            <span>待办</span>
+            <strong id="taskCount">-</strong>
+            <p>需要处理项目</p>
+          </article>
+          <article>
+            <span>风险</span>
+            <strong id="riskCount">-</strong>
+            <p>异常与提醒</p>
+          </article>
+        </section>
+
+        <div class="content-grid">
+          <section class="panel overview-panel">
+            <div class="panel-head">
+              <h3>今日总览</h3>
+              <span id="savedPath">尚未生成</span>
+            </div>
+            <div id="overview" class="rich-text empty">点击“生成今日简报”开始读取今天的邮件。</div>
+          </section>
+
+          <section class="panel task-panel">
+            <div class="panel-head">
+              <h3>待办任务</h3>
+              <span>按优先级查看</span>
+            </div>
+            <div id="tasks" class="rich-text empty">暂无任务。</div>
+          </section>
+
+          <section class="panel risk-panel">
+            <div class="panel-head">
+              <h3>风险与异常</h3>
+              <span>账号、财务、截止期</span>
+            </div>
+            <div id="risks" class="rich-text empty">暂无风险。</div>
+          </section>
+
+          <section class="panel table-panel">
+            <div class="panel-head">
+              <h3>邮件列表</h3>
+              <span id="tableHint">最近读取的邮件</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>发件人</th>
+                    <th>主题</th>
+                    <th>时间</th>
+                    <th>标签</th>
+                  </tr>
+                </thead>
+                <tbody id="emailRows">
+                  <tr>
+                    <td colspan="4" class="empty-row">还没有读取邮件。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <aside class="detail-rail">
+        <div class="rail-head">
+          <h3>详情</h3>
+          <button id="markdownToggle" type="button">原始 Markdown</button>
+        </div>
+        <div id="selectedEmail" class="selected-email empty">选择一封邮件查看摘要片段。</div>
+        <div class="suggestion">
+          <h4>建议回复</h4>
+          <div id="suggestedReply" class="rich-text empty">生成简报后会显示建议回复片段。</div>
+        </div>
+      </aside>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

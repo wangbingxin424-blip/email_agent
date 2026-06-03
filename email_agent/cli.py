@@ -42,9 +42,9 @@ def render_email_listing(emails: list[EmailItem], target_date: date) -> str:
     return "\n".join(lines)
 
 
-def save_markdown(output_dir: Path, target_date: date, content: str) -> Path:
+def save_markdown(output_dir: Path, target_date: date, content: str, kind: str = "summary") -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / f"email-summary-{target_date.isoformat()}.md"
+    path = output_dir / f"email-{kind}-{target_date.isoformat()}.md"
     path.write_text(content + "\n", encoding="utf-8")
     return path
 
@@ -66,7 +66,7 @@ def summarize_command(args: argparse.Namespace) -> int:
 
     print(output)
     if not args.no_save:
-        path = save_markdown(agent_config.output_dir, target_date, output)
+        path = save_markdown(agent_config.output_dir, target_date, output, kind="listing" if args.no_ai else "summary")
         print(f"\nSaved summary to {path}")
     return 0
 
@@ -81,6 +81,18 @@ def build_parser() -> argparse.ArgumentParser:
     summarize.add_argument("--no-ai", action="store_true", help="Only list fetched emails without calling AI.")
     summarize.add_argument("--no-save", action="store_true", help="Do not save the Markdown output.")
     summarize.set_defaults(func=summarize_command)
+
+    web = subparsers.add_parser("web", help="Start the local visual web dashboard.")
+    web.add_argument("--host", default="127.0.0.1", help="Host to bind. Default: 127.0.0.1.")
+    web.add_argument("--port", type=int, default=8765, help="Port to bind. Default: 8765.")
+
+    def web_command(args: argparse.Namespace) -> int:
+        from email_agent.web import run_server
+
+        run_server(args.host, args.port)
+        return 0
+
+    web.set_defaults(func=web_command)
 
     parser.set_defaults(func=summarize_command, date="today", max_emails=None, no_ai=False, no_save=False)
     return parser
