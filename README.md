@@ -1,6 +1,6 @@
 # email_agent
 
-本地邮件总结 agent。当前先支持 QQ 邮箱：读取指定日期的邮件内容，然后调用 OpenAI 兼容的 Chat Completions 接口生成中文日报，告诉你当天主要发生了什么。
+本地邮件总结 agent。当前先支持 QQ 邮箱：读取指定日期的邮件内容，然后调用 OpenAI 兼容的 Chat Completions 接口生成中文日报，告诉你当天主要发生了什么。可以使用 OpenAI，也可以使用阿里云 DashScope 兼容模式。
 
 ## 功能
 
@@ -27,16 +27,28 @@ Copy-Item .env.example .env.local
 编辑 `.env.local`，填入：
 
 ```env
-OPENAI_API_KEY=你的OpenAI API Key
+OPENAI_API_KEY=你的API Key
 QQ_EMAIL_ADDRESS=你的QQ邮箱地址
 QQ_EMAIL_AUTH_CODE=你的QQ邮箱授权码
 ```
 
-可选项：
+阿里云 DashScope 推荐配置：
+
+```env
+OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+OPENAI_MODEL=qwen-plus
+```
+
+OpenAI 官方接口配置：
 
 ```env
 OPENAI_MODEL=gpt-4.1-mini
 OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+其他可选项：
+
+```env
 EMAIL_AGENT_TIMEZONE=Asia/Shanghai
 EMAIL_AGENT_MAX_EMAILS=80
 ```

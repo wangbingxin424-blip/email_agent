@@ -6,6 +6,20 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
+PLACEHOLDER_VALUES = {
+    "your_openai_api_key_here",
+    "your_api_key_here",
+    "replace_with_your_aliyun_dashscope_key",
+    "your_qq_email@qq.com",
+    "your_qq_mail_imap_authorization_code",
+    "replace_with_your_qq_mail_imap_authorization_code",
+}
+
+
+def is_placeholder(value: str) -> bool:
+    return value.strip() in PLACEHOLDER_VALUES
+
+
 def load_dotenv(path: Path) -> None:
     if not path.exists():
         return
@@ -46,7 +60,7 @@ class OpenAIConfig:
     @classmethod
     def from_env(cls) -> "OpenAIConfig":
         api_key = os.getenv("OPENAI_API_KEY", "").strip()
-        if not api_key or api_key == "your_openai_api_key_here":
+        if not api_key or is_placeholder(api_key):
             raise RuntimeError("OPENAI_API_KEY is missing. Fill it in .env.local before running AI summaries.")
         return cls(
             api_key=api_key,
@@ -67,9 +81,9 @@ class MailConfig:
     def qq_from_env(cls) -> "MailConfig":
         address = os.getenv("QQ_EMAIL_ADDRESS", "").strip()
         auth_code = os.getenv("QQ_EMAIL_AUTH_CODE", "").strip()
-        if not address or address == "your_qq_email@qq.com":
+        if not address or is_placeholder(address):
             raise RuntimeError("QQ_EMAIL_ADDRESS is missing. Fill it in .env.local.")
-        if not auth_code or auth_code == "your_qq_mail_imap_authorization_code":
+        if not auth_code or is_placeholder(auth_code):
             raise RuntimeError("QQ_EMAIL_AUTH_CODE is missing. Fill the QQ Mail IMAP authorization code in .env.local.")
         return cls(
             address=address,
