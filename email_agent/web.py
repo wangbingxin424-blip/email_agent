@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from email_agent.accounts import add_mail_account
+from email_agent.accounts import add_mail_account, delete_mail_account
 from email_agent.ai import OpenAISummarizer
 from email_agent.cli import parse_target_date, render_email_listing, save_markdown
 from email_agent.config import AgentConfig, MailConfig, OpenAIConfig, load_env_files
@@ -125,7 +125,7 @@ def config_status() -> dict:
     try:
         accounts = MailConfig.all_from_env()
         result["mail"] = {
-            "configured": True,
+            "configured": bool(accounts),
             "count": len(accounts),
             "accounts": [
                 {
@@ -184,6 +184,9 @@ class EmailAgentHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/accounts":
             self.add_account()
             return
+        if parsed.path == "/api/accounts/delete":
+            self.delete_account()
+            return
         if parsed.path != "/api/summarize":
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
             return
@@ -201,6 +204,15 @@ class EmailAgentHandler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             account = add_mail_account(payload)
             self.write_json({"ok": True, "account": account, "status": config_status()})
+        except Exception as exc:
+            self.write_json({"error": str(exc)}, status=400)
+
+    def delete_account(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            result = delete_mail_account(str(payload.get("address", "")))
+            self.write_json({"ok": True, "result": result, "status": config_status()})
         except Exception as exc:
             self.write_json({"error": str(exc)}, status=400)
 

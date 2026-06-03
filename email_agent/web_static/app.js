@@ -3,6 +3,7 @@ const state = {
   status: null,
   selectedIndex: 0,
   showingMarkdown: false,
+  accountRuns: new Map(),
 };
 
 const els = {
@@ -159,6 +160,7 @@ function renderResult(result) {
   state.result = result;
   state.selectedIndex = 0;
   state.showingMarkdown = false;
+  state.accountRuns = new Map((result.accounts || []).map((account) => [account.address, account]));
 
   els.emailCount.textContent = result.email_count ?? result.emails?.length ?? els.emailCount.textContent ?? "-";
   els.accountCount.textContent = result.account_count ?? state.status?.mail?.count ?? result.accounts?.length ?? "-";
@@ -179,6 +181,7 @@ function renderResult(result) {
   els.risks.innerHTML = markdownToHtml(result.sections?.risks || "暂无风险。");
 
   renderRows(result.emails || []);
+  if (state.status) renderSettings(state.status);
   renderSelectedEmail();
   renderSuggestedReply();
 }
@@ -232,11 +235,21 @@ function renderSettings(status) {
   const accounts = status.mail?.accounts || [];
   els.accountSummary.textContent = accounts.length ? `${accounts.length} 个邮箱` : "未配置";
   els.accountList.innerHTML = accounts.length
-    ? accounts.map((account) => `<article>
-        <strong>${escapeHtml(account.label || account.address)}</strong>
-        <span>${escapeHtml(providerNames[account.provider] || account.provider || "IMAP")} · ${escapeHtml(account.address)}</span>
-        <small>${escapeHtml(account.host)} · ${escapeHtml(account.mailbox)}</small>
-      </article>`).join("")
+    ? accounts.map((account) => {
+        const run = state.accountRuns.get(account.address);
+        const statusText = run ? (run.ok ? `${run.count} 封` : "读取失败") : "待读取";
+        const statusClass = run ? (run.ok ? "ok" : "failed") : "";
+        return `<article>
+          <div class="account-card-head">
+            <strong>${escapeHtml(account.label || account.address)}</strong>
+            <button type="button" class="text-button danger" data-delete-account="${escapeHtml(account.address)}">删除</button>
+          </div>
+          <span>${escapeHtml(providerNames[account.provider] || account.provider || "IMAP")} · ${escapeHtml(account.address)}</span>
+          <small>${escapeHtml(account.host)} · ${escapeHtml(account.mailbox)}</small>
+          <em class="${statusClass}">${escapeHtml(statusText)}</em>
+          ${run?.error ? `<p class="account-error">${escapeHtml(run.error)}</p>` : ""}
+        </article>`;
+      }).join("")
     : `<p class="empty">还没有配置邮箱账号。</p>`;
 }
 
@@ -320,6 +333,27 @@ async function addAccount(event) {
   }
 }
 
+async function deleteAccount(address) {
+  if (!address) return;
+  try {
+    const response = await fetch("/api/accounts/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || "删除失败");
+    state.status = data.status;
+    state.accountRuns.delete(address);
+    renderSettings(data.status);
+    els.mailStatus.textContent = data.status.mail?.configured ? `已连接 ${data.status.mail.count} 个邮箱` : "邮箱未配置";
+    els.accountCount.textContent = data.status.mail?.count || "-";
+    showToast("邮箱已删除。");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 function openSettings() {
   els.settingsDrawer.hidden = false;
   els.settingsButton.classList.add("active");
@@ -357,6 +391,8 @@ els.markdownToggle.addEventListener("click", () => {
 els.settingsButton.addEventListener("click", openSettings);
 els.settingsDrawer.addEventListener("click", (event) => {
   if (event.target.matches("[data-close-settings]")) closeSettings();
+  const deleteButton = event.target.closest("[data-delete-account]");
+  if (deleteButton) deleteAccount(deleteButton.dataset.deleteAccount);
 });
 document.querySelectorAll(".nav-item[data-target]").forEach((button) => {
   button.addEventListener("click", () => {

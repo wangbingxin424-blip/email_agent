@@ -180,6 +180,8 @@ class MailConfig:
 
         if accounts:
             return accounts
+        if os.getenv("EMAIL_ACCOUNTS_MANAGED", "").strip() in {"1", "true", "yes"}:
+            return []
 
         return [cls.qq_from_env()]
 

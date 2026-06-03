@@ -44,6 +44,15 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(guess_imap_host("person@163.com"), "imap.163.com")
         self.assertEqual(guess_imap_host("person@example.com"), "imap.example.com")
 
+    def test_managed_empty_accounts_do_not_fall_back_to_legacy_qq(self):
+        env = {
+            "EMAIL_ACCOUNTS_MANAGED": "1",
+            "QQ_EMAIL_ADDRESS": "legacy@qq.com",
+            "QQ_EMAIL_AUTH_CODE": "legacy-code",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            self.assertEqual(MailConfig.all_from_env(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

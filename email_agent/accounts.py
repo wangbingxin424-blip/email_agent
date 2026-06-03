@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from email_agent.config import guess_provider, host_for_provider, is_placeholder, load_env_files
+
+
+ACCOUNT_KEY = re.compile(r"EMAIL_ACCOUNT_(\d+)_(LABEL|ADDRESS|AUTH_CODE|PROVIDER|IMAP_HOST|IMAP_PORT|MAILBOX)$")
 
 
 def read_env_values(path: Path) -> dict[str, str]:
@@ -19,61 +23,36 @@ def read_env_values(path: Path) -> dict[str, str]:
     return values
 
 
-def has_multi_accounts(values: dict[str, str]) -> bool:
+def read_accounts(values: dict[str, str]) -> list[dict[str, str]]:
+    accounts: list[dict[str, str]] = []
     index = 1
     while f"EMAIL_ACCOUNT_{index}_ADDRESS" in values or f"EMAIL_ACCOUNT_{index}_AUTH_CODE" in values:
-        if values.get(f"EMAIL_ACCOUNT_{index}_ADDRESS"):
-            return True
+        prefix = f"EMAIL_ACCOUNT_{index}"
+        address = values.get(f"{prefix}_ADDRESS", "").strip()
+        if address:
+            accounts.append(
+                {
+                    "label": values.get(f"{prefix}_LABEL", "") or address,
+                    "address": address,
+                    "auth_code": values.get(f"{prefix}_AUTH_CODE", ""),
+                    "provider": values.get(f"{prefix}_PROVIDER", "") or guess_provider(address),
+                    "host": values.get(f"{prefix}_IMAP_HOST", "") or host_for_provider("", address),
+                    "port": values.get(f"{prefix}_IMAP_PORT", "993") or "993",
+                    "mailbox": values.get(f"{prefix}_MAILBOX", "INBOX") or "INBOX",
+                }
+            )
         index += 1
-    return False
-
-
-def next_account_index(values: dict[str, str]) -> int:
-    index = 1
-    while f"EMAIL_ACCOUNT_{index}_ADDRESS" in values or f"EMAIL_ACCOUNT_{index}_AUTH_CODE" in values:
-        index += 1
-    return index
+    return accounts
 
 
 def configured_addresses(values: dict[str, str]) -> set[str]:
-    addresses: set[str] = set()
-    index = 1
-    while f"EMAIL_ACCOUNT_{index}_ADDRESS" in values or f"EMAIL_ACCOUNT_{index}_AUTH_CODE" in values:
-        address = values.get(f"EMAIL_ACCOUNT_{index}_ADDRESS", "").strip().lower()
-        if address:
-            addresses.add(address)
-        index += 1
+    addresses = {account["address"].lower() for account in read_accounts(values)}
+    if values.get("EMAIL_ACCOUNTS_MANAGED", "").strip() in {"1", "true", "yes"}:
+        return addresses
     qq_address = values.get("QQ_EMAIL_ADDRESS", "").strip().lower()
     if qq_address:
         addresses.add(qq_address)
     return addresses
-
-
-def _account_env_lines(index: int, account: dict[str, str]) -> list[str]:
-    prefix = f"EMAIL_ACCOUNT_{index}"
-    lines = [
-        "",
-        f"# Email account {index}",
-        f"{prefix}_LABEL={account.get('label', '')}",
-        f"{prefix}_ADDRESS={account['address']}",
-        f"{prefix}_AUTH_CODE={account['auth_code']}",
-        f"{prefix}_PROVIDER={account.get('provider', 'custom')}",
-        f"{prefix}_IMAP_HOST={account['host']}",
-        f"{prefix}_IMAP_PORT={account.get('port', '993')}",
-        f"{prefix}_MAILBOX={account.get('mailbox', 'INBOX')}",
-    ]
-    return lines
-
-
-def _set_account_environ(index: int, account: dict[str, str]) -> None:
-    prefix = f"EMAIL_ACCOUNT_{index}"
-    os.environ[f"{prefix}_LABEL"] = account.get("label", "")
-    os.environ[f"{prefix}_ADDRESS"] = account["address"]
-    os.environ[f"{prefix}_AUTH_CODE"] = account["auth_code"]
-    os.environ[f"{prefix}_PROVIDER"] = account.get("provider", "custom")
-    os.environ[f"{prefix}_IMAP_HOST"] = account["host"]
-    os.environ[f"{prefix}_IMAP_PORT"] = account.get("port", "993")
-    os.environ[f"{prefix}_MAILBOX"] = account.get("mailbox", "INBOX")
 
 
 def _legacy_qq_account(values: dict[str, str]) -> dict[str, str] | None:
@@ -90,6 +69,74 @@ def _legacy_qq_account(values: dict[str, str]) -> dict[str, str] | None:
         "port": values.get("QQ_IMAP_PORT", "993") or "993",
         "mailbox": values.get("QQ_MAILBOX", "INBOX") or "INBOX",
     }
+
+
+def _account_env_lines(index: int, account: dict[str, str]) -> list[str]:
+    prefix = f"EMAIL_ACCOUNT_{index}"
+    return [
+        "",
+        f"# Email account {index}",
+        f"{prefix}_LABEL={account.get('label', '')}",
+        f"{prefix}_ADDRESS={account['address']}",
+        f"{prefix}_AUTH_CODE={account['auth_code']}",
+        f"{prefix}_PROVIDER={account.get('provider', 'custom')}",
+        f"{prefix}_IMAP_HOST={account['host']}",
+        f"{prefix}_IMAP_PORT={account.get('port', '993')}",
+        f"{prefix}_MAILBOX={account.get('mailbox', 'INBOX')}",
+    ]
+
+
+def _base_lines(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    cleaned: list[str] = []
+    skip_blank_after_account = False
+    for line in lines:
+        stripped = line.strip()
+        if re.match(r"#\s*Email account \d+\s*$", stripped):
+            skip_blank_after_account = False
+            continue
+        if ACCOUNT_KEY.match(stripped.split("=", 1)[0] if "=" in stripped else ""):
+            skip_blank_after_account = True
+            continue
+        if skip_blank_after_account and not stripped:
+            skip_blank_after_account = False
+            continue
+        skip_blank_after_account = False
+        cleaned.append(line)
+    while cleaned and not cleaned[-1].strip():
+        cleaned.pop()
+    return cleaned
+
+
+def _sync_account_environ(accounts: list[dict[str, str]], max_existing: int = 20) -> None:
+    for index in range(1, max(max_existing, len(accounts)) + 1):
+        prefix = f"EMAIL_ACCOUNT_{index}"
+        for suffix in ("LABEL", "ADDRESS", "AUTH_CODE", "PROVIDER", "IMAP_HOST", "IMAP_PORT", "MAILBOX"):
+            os.environ.pop(f"{prefix}_{suffix}", None)
+
+    for index, account in enumerate(accounts, start=1):
+        prefix = f"EMAIL_ACCOUNT_{index}"
+        os.environ[f"{prefix}_LABEL"] = account.get("label", "")
+        os.environ[f"{prefix}_ADDRESS"] = account["address"]
+        os.environ[f"{prefix}_AUTH_CODE"] = account["auth_code"]
+        os.environ[f"{prefix}_PROVIDER"] = account.get("provider", "custom")
+        os.environ[f"{prefix}_IMAP_HOST"] = account["host"]
+        os.environ[f"{prefix}_IMAP_PORT"] = account.get("port", "993")
+        os.environ[f"{prefix}_MAILBOX"] = account.get("mailbox", "INBOX")
+
+
+def _write_accounts(env_path: Path, accounts: list[dict[str, str]], values: dict[str, str]) -> None:
+    base = _base_lines(env_path)
+    if not any(line.strip().startswith("EMAIL_ACCOUNTS_MANAGED=") for line in base):
+        base.append("EMAIL_ACCOUNTS_MANAGED=1")
+    lines = list(base)
+    for index, account in enumerate(accounts, start=1):
+        lines.extend(_account_env_lines(index, account))
+    env_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    os.environ["EMAIL_ACCOUNTS_MANAGED"] = "1"
+    _sync_account_environ(accounts, max_existing=max(20, len(read_accounts(values)) + 5))
 
 
 def add_mail_account(payload: dict, root: Path | None = None) -> dict:
@@ -117,6 +164,12 @@ def add_mail_account(payload: dict, root: Path | None = None) -> dict:
     if address.lower() in configured_addresses(values):
         raise ValueError("这个邮箱已经添加过了。")
 
+    accounts = read_accounts(values)
+    if not accounts:
+        legacy = _legacy_qq_account(values)
+        if legacy:
+            accounts.append(legacy)
+
     account = {
         "label": label or address,
         "address": address,
@@ -126,28 +179,34 @@ def add_mail_account(payload: dict, root: Path | None = None) -> dict:
         "port": port,
         "mailbox": mailbox,
     }
+    accounts.append(account)
+    _write_accounts(env_path, accounts, values)
+    return public_account(account)
 
-    appended: list[str] = []
-    index = next_account_index(values)
-    if not has_multi_accounts(values):
-        legacy = _legacy_qq_account(values)
-        if legacy:
-            appended.extend(_account_env_lines(index, legacy))
-            _set_account_environ(index, legacy)
-            index += 1
 
-    appended.extend(_account_env_lines(index, account))
-    _set_account_environ(index, account)
+def delete_mail_account(address: str, root: Path | None = None) -> dict:
+    root = root or Path.cwd()
+    env_path = root / ".env.local"
+    load_env_files(root)
+    values = read_env_values(env_path)
+    target = address.strip().lower()
+    if not target:
+        raise ValueError("缺少要删除的邮箱地址。")
 
-    existing = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
-    suffix = "\n".join(appended) + "\n"
-    separator = "" if not existing or existing.endswith("\n") else "\n"
-    env_path.write_text(existing + separator + suffix, encoding="utf-8")
+    accounts = read_accounts(values)
+    kept = [account for account in accounts if account["address"].lower() != target]
+    if len(kept) == len(accounts):
+        raise ValueError("没有找到这个邮箱。")
 
+    _write_accounts(env_path, kept, values)
+    return {"deleted": address, "remaining": len(kept)}
+
+
+def public_account(account: dict[str, str]) -> dict:
     return {
         "address": account["address"],
-        "label": account["label"],
-        "provider": account["provider"],
+        "label": account.get("label", account["address"]),
+        "provider": account.get("provider", "custom"),
         "host": account["host"],
-        "mailbox": account["mailbox"],
+        "mailbox": account.get("mailbox", "INBOX"),
     }

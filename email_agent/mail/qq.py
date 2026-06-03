@@ -35,7 +35,11 @@ class QQMailClient:
 
         with imaplib.IMAP4_SSL(self.config.host, self.config.port) as imap:
             imap.login(self.config.address, self.config.auth_code)
-            imap.select(self.config.mailbox, readonly=True)
+            self._send_client_id(imap)
+            status, select_data = imap.select(self.config.mailbox, readonly=True)
+            if status != "OK":
+                detail = self._format_response(select_data)
+                raise RuntimeError(f"IMAP select failed for {self.config.address}: {detail or status}")
             status, data = imap.uid("SEARCH", None, f'(SINCE "{since}" BEFORE "{before}")')
             if status != "OK":
                 raise RuntimeError(f"IMAP search failed for {self.config.address}: {status}")
@@ -72,6 +76,26 @@ class QQMailClient:
             uid = match.group(1).decode("ascii", errors="replace") if match else f"unknown-{fallback_index}"
             fallback_index += 1
             yield uid, part[1]
+
+    def _send_client_id(self, imap: imaplib.IMAP4_SSL) -> None:
+        if self.config.provider not in {"163", "126", "yeah"}:
+            return
+        try:
+            imap._simple_command("ID", '("name" "email-agent" "version" "0.3" "vendor" "local")')
+        except Exception:
+            return
+
+    @staticmethod
+    def _format_response(data) -> str:
+        if not data:
+            return ""
+        parts: list[str] = []
+        for item in data:
+            if isinstance(item, bytes):
+                parts.append(item.decode("utf-8", errors="replace"))
+            else:
+                parts.append(str(item))
+        return "; ".join(parts)
 
     @staticmethod
     def _belongs_to_date(item: EmailItem, target_date: date, tz) -> bool:

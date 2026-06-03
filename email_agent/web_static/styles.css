@@ -552,18 +552,62 @@ tbody tr.selected {
   background: #fbfcfc;
 }
 
+.account-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .account-list strong,
 .account-list span,
-.account-list small {
+.account-list small,
+.account-list em {
   display: block;
   overflow-wrap: anywhere;
 }
 
 .account-list span,
-.account-list small {
+.account-list small,
+.account-list em {
   margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.account-list em {
+  font-style: normal;
+}
+
+.account-list em.ok {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.account-list em.failed {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.account-error {
+  margin: 8px 0 0;
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.text-button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.text-button.danger {
+  color: var(--red);
 }
 
 .account-form {
