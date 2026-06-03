@@ -16,6 +16,7 @@ class AIPromptTests(unittest.TestCase):
                     recipients="me@example.com",
                     sent_at=datetime(2026, 6, 3, 10, 0, tzinfo=timezone.utc),
                     body="今天完成了第一版方案，需要明天确认预算。",
+                    account="me@example.com",
                 )
             ],
             date(2026, 6, 3),
@@ -25,6 +26,7 @@ class AIPromptTests(unittest.TestCase):
         self.assertIn("待办任务", prompt)
         self.assertIn("项目更新", prompt)
         self.assertIn("需要明天确认预算", prompt)
+        self.assertIn("me@example.com", prompt)
 
 
 if __name__ == "__main__":

@@ -82,7 +82,7 @@ def extract_body(message: StdEmailMessage) -> str:
     return ""
 
 
-def parse_email(raw: bytes, uid: str) -> EmailItem:
+def parse_email(raw: bytes, uid: str, account: str = "", provider: str = "") -> EmailItem:
     message = BytesParser(policy=policy.default).parsebytes(raw)
     return EmailItem(
         uid=uid,
@@ -91,4 +91,6 @@ def parse_email(raw: bytes, uid: str) -> EmailItem:
         recipients=decode_mime_header(message.get("To")),
         sent_at=parse_email_date(message.get("Date")),
         body=extract_body(message),
+        account=account,
+        provider=provider,
     )

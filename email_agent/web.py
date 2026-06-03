@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict
-from datetime import date
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,7 +11,7 @@ from urllib.parse import urlparse
 from email_agent.ai import OpenAISummarizer
 from email_agent.cli import parse_target_date, render_email_listing, save_markdown
 from email_agent.config import AgentConfig, MailConfig, OpenAIConfig, load_env_files
-from email_agent.mail import QQMailClient
+from email_agent.fetcher import fetch_accounts_for_date
 from email_agent.models import EmailItem
 
 
@@ -22,6 +21,8 @@ WEB_DIR = Path(__file__).resolve().parent / "web_static"
 def email_to_dict(item: EmailItem) -> dict:
     return {
         "uid": item.uid,
+        "account": item.account,
+        "provider": item.provider,
         "subject": item.subject,
         "sender": item.sender,
         "recipients": item.recipients,
@@ -35,17 +36,34 @@ def extract_section(markdown: str, title: str) -> str:
     match = pattern.search(markdown)
     if match:
         return match.group(1).strip()
-    bold_pattern = re.compile(rf"(?ms)^\s*(?:\*\*)?\d+\.\s*{re.escape(title)}(?:\*\*)?.*?(?:\n|$)(.*?)(?=^\s*(?:\*\*)?\d+\.\s*|\Z)")
-    match = bold_pattern.search(markdown)
+    numbered = re.compile(rf"(?ms)^\s*(?:\*\*)?\d+\.\s*{re.escape(title)}(?:\*\*)?.*?(?:\n|$)(.*?)(?=^\s*(?:\*\*)?\d+\.\s*|\Z)")
+    match = numbered.search(markdown)
     return match.group(1).strip() if match else ""
+
+
+def section_payload(markdown: str) -> dict:
+    return {
+        "overview": extract_section(markdown, "今日总览"),
+        "tasks": extract_section(markdown, "待办任务"),
+        "risks": extract_section(markdown, "风险与异常"),
+        "important": extract_section(markdown, "重要事项"),
+        "schedule": extract_section(markdown, "会议与日程"),
+        "reply": extract_section(markdown, "建议回复"),
+    }
 
 
 def summarize_for_date(date_value: str, no_ai: bool = False) -> dict:
     load_env_files()
     agent_config = AgentConfig.from_env()
     target_date = parse_target_date(date_value, agent_config.timezone)
-    mail_config = MailConfig.qq_from_env()
-    emails = QQMailClient(mail_config).fetch_for_date(target_date, agent_config.timezone, limit=agent_config.max_emails)
+    accounts = MailConfig.all_from_env()
+    emails, account_results = fetch_accounts_for_date(
+        accounts,
+        target_date,
+        agent_config.timezone,
+        per_account_limit=agent_config.max_emails,
+        workers=agent_config.fetch_workers,
+    )
 
     if no_ai:
         markdown = render_email_listing(emails, target_date)
@@ -53,19 +71,19 @@ def summarize_for_date(date_value: str, no_ai: bool = False) -> dict:
         markdown = OpenAISummarizer(OpenAIConfig.from_env()).summarize(emails, target_date)
 
     output_path = save_markdown(agent_config.output_dir, target_date, markdown, kind="listing" if no_ai else "summary")
-    return {
+    result = {
         "date": target_date.isoformat(),
         "email_count": len(emails),
+        "account_count": len(accounts),
+        "accounts": account_results,
         "markdown": markdown,
-        "sections": {
-            "overview": extract_section(markdown, "今日总览"),
-            "tasks": extract_section(markdown, "待办任务"),
-            "risks": extract_section(markdown, "风险与异常"),
-            "important": extract_section(markdown, "重要事项"),
-        },
+        "sections": section_payload(markdown),
         "emails": [email_to_dict(item) for item in emails],
         "output_path": str(output_path),
     }
+    sidecar_path = output_path.with_suffix(".json")
+    sidecar_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    return result
 
 
 def latest_summary() -> dict:
@@ -75,24 +93,23 @@ def latest_summary() -> dict:
     if not files:
         return {"found": False}
     path = files[0]
+    sidecar_path = path.with_suffix(".json")
+    if sidecar_path.exists():
+        payload = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        payload["found"] = True
+        return payload
+
     markdown = path.read_text(encoding="utf-8")
     date_match = re.search(r"email-summary-(\d{4}-\d{2}-\d{2})\.md$", path.name)
-    count_match = re.search(r"基于\s*(\d+)\s*封邮件|邮件数量[：:]\s*(\d+)", markdown)
-    email_count = None
-    if count_match:
-        email_count = int(next(group for group in count_match.groups() if group))
-    summary_date = date_match.group(1) if date_match else None
+    count_match = re.search(r"邮件数量[:：]\s*(\d+)", markdown)
     return {
         "found": True,
-        "date": summary_date,
-        "email_count": email_count,
+        "date": date_match.group(1) if date_match else None,
+        "email_count": int(count_match.group(1)) if count_match else None,
+        "account_count": None,
+        "accounts": [],
         "markdown": markdown,
-        "sections": {
-            "overview": extract_section(markdown, "今日总览"),
-            "tasks": extract_section(markdown, "待办任务"),
-            "risks": extract_section(markdown, "风险与异常"),
-            "important": extract_section(markdown, "重要事项"),
-        },
+        "sections": section_payload(markdown),
         "emails": [],
         "output_path": str(path),
     }
@@ -101,24 +118,47 @@ def latest_summary() -> dict:
 def config_status() -> dict:
     load_env_files()
     result = {
-        "mail": {"configured": False, "address": None, "host": None},
-        "ai": {"configured": False, "model": None, "base_url": None},
+        "mail": {"configured": False, "count": 0, "accounts": []},
+        "ai": {"configured": False, "base_url": None},
+        "agent": {"max_emails": None, "fetch_workers": None, "timezone": None},
     }
     try:
-        mail = MailConfig.qq_from_env()
-        result["mail"] = {"configured": True, "address": mail.address, "host": mail.host}
+        accounts = MailConfig.all_from_env()
+        result["mail"] = {
+            "configured": True,
+            "count": len(accounts),
+            "accounts": [
+                {
+                    "address": account.address,
+                    "label": account.display_name,
+                    "host": account.host,
+                    "mailbox": account.mailbox,
+                    "provider": account.provider,
+                }
+                for account in accounts
+            ],
+        }
     except Exception as exc:
         result["mail"]["error"] = str(exc)
     try:
         ai = OpenAIConfig.from_env()
-        result["ai"] = {"configured": True, "model": ai.model, "base_url": ai.base_url}
+        result["ai"] = {"configured": True, "base_url": ai.base_url}
     except Exception as exc:
         result["ai"]["error"] = str(exc)
+    try:
+        agent = AgentConfig.from_env()
+        result["agent"] = {
+            "max_emails": agent.max_emails,
+            "fetch_workers": agent.fetch_workers,
+            "timezone": str(agent.timezone),
+        }
+    except Exception as exc:
+        result["agent"]["error"] = str(exc)
     return result
 
 
 class EmailAgentHandler(BaseHTTPRequestHandler):
-    server_version = "EmailAgent/0.1"
+    server_version = "EmailAgent/0.2"
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)

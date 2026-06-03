@@ -16,16 +16,16 @@
             <p>本地只读邮件工作台</p>
           </div>
         </div>
-        <nav class="nav">
-          <button class="nav-item active" type="button">今日简报</button>
-          <button class="nav-item" type="button">邮件列表</button>
-          <button class="nav-item" type="button">设置</button>
+        <nav class="nav" aria-label="主导航">
+          <button class="nav-item active" type="button" data-target="brief">今日简报</button>
+          <button class="nav-item" type="button" data-target="mailTable">邮件列表</button>
+          <button class="nav-item" type="button" id="settingsButton">设置</button>
         </nav>
         <div class="connection">
           <div class="status-dot"></div>
           <div>
             <strong id="mailStatus">检查邮箱配置</strong>
-            <span id="modelStatus">检查模型配置</span>
+            <span id="modelStatus">检查 AI 配置</span>
           </div>
         </div>
       </aside>
@@ -34,12 +34,12 @@
         <header class="topbar">
           <div>
             <h2>今日简报</h2>
-            <p id="subtitle">读取 QQ 邮箱，生成今天主要发生的事情。</p>
+            <p id="subtitle">读取所有已配置邮箱，生成今天主要发生的事情。</p>
           </div>
           <form id="summaryForm" class="controls">
             <button class="segmented active" type="button" id="todayButton">今天</button>
             <label class="date-field">
-              <span>选择日期</span>
+              <span>日期</span>
               <input id="dateInput" type="date" />
             </label>
             <label class="check-field">
@@ -57,9 +57,9 @@
             <p>当天读取数量</p>
           </article>
           <article>
-            <span>重要</span>
-            <strong id="importantCount">-</strong>
-            <p>模型提取事项</p>
+            <span>邮箱</span>
+            <strong id="accountCount">-</strong>
+            <p>已配置账号</p>
           </article>
           <article>
             <span>待办</span>
@@ -73,7 +73,7 @@
           </article>
         </section>
 
-        <div class="content-grid">
+        <div class="content-grid" id="brief">
           <section class="panel overview-panel">
             <div class="panel-head">
               <h3>今日总览</h3>
@@ -98,7 +98,7 @@
             <div id="risks" class="rich-text empty">暂无风险。</div>
           </section>
 
-          <section class="panel table-panel">
+          <section class="panel table-panel" id="mailTable">
             <div class="panel-head">
               <h3>邮件列表</h3>
               <span id="tableHint">最近读取的邮件</span>
@@ -107,6 +107,7 @@
               <table>
                 <thead>
                   <tr>
+                    <th>邮箱</th>
                     <th>发件人</th>
                     <th>主题</th>
                     <th>时间</th>
@@ -115,7 +116,7 @@
                 </thead>
                 <tbody id="emailRows">
                   <tr>
-                    <td colspan="4" class="empty-row">还没有读取邮件。</td>
+                    <td colspan="5" class="empty-row">还没有读取邮件。</td>
                   </tr>
                 </tbody>
               </table>
@@ -135,6 +136,36 @@
           <div id="suggestedReply" class="rich-text empty">生成简报后会显示建议回复片段。</div>
         </div>
       </aside>
+    </div>
+
+    <div class="settings-drawer" id="settingsDrawer" hidden>
+      <div class="drawer-backdrop" data-close-settings></div>
+      <section class="drawer-panel" aria-label="设置">
+        <div class="drawer-head">
+          <div>
+            <h3>设置</h3>
+            <p>这里只显示配置状态，不展示密钥或授权码。</p>
+          </div>
+          <button type="button" class="icon-button" data-close-settings aria-label="关闭设置">×</button>
+        </div>
+        <div class="settings-section">
+          <h4>邮箱账号</h4>
+          <div id="accountList" class="account-list"></div>
+        </div>
+        <div class="settings-section">
+          <h4>运行参数</h4>
+          <dl class="settings-list">
+            <dt>AI 简报</dt>
+            <dd id="aiSetting">检查中</dd>
+            <dt>每账号读取上限</dt>
+            <dd id="maxEmailsSetting">-</dd>
+            <dt>并发读取数</dt>
+            <dd id="workersSetting">-</dd>
+            <dt>时区</dt>
+            <dd id="timezoneSetting">-</dd>
+          </dl>
+        </div>
+      </section>
     </div>
 
     <div id="toast" class="toast" hidden></div>

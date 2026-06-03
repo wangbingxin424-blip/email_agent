@@ -12,6 +12,8 @@ class EmailItem:
     recipients: str
     sent_at: datetime | None
     body: str
+    account: str = ""
+    provider: str = ""
 
     def compact_body(self, max_chars: int = 4000) -> str:
         text = " ".join(self.body.split())

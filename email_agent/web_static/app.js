@@ -1,5 +1,6 @@
 const state = {
   result: null,
+  status: null,
   selectedIndex: 0,
   showingMarkdown: false,
 };
@@ -15,7 +16,7 @@ const els = {
   statusDot: document.querySelector(".status-dot"),
   subtitle: document.querySelector("#subtitle"),
   emailCount: document.querySelector("#emailCount"),
-  importantCount: document.querySelector("#importantCount"),
+  accountCount: document.querySelector("#accountCount"),
   taskCount: document.querySelector("#taskCount"),
   riskCount: document.querySelector("#riskCount"),
   savedPath: document.querySelector("#savedPath"),
@@ -26,6 +27,13 @@ const els = {
   selectedEmail: document.querySelector("#selectedEmail"),
   suggestedReply: document.querySelector("#suggestedReply"),
   markdownToggle: document.querySelector("#markdownToggle"),
+  settingsButton: document.querySelector("#settingsButton"),
+  settingsDrawer: document.querySelector("#settingsDrawer"),
+  accountList: document.querySelector("#accountList"),
+  aiSetting: document.querySelector("#aiSetting"),
+  maxEmailsSetting: document.querySelector("#maxEmailsSetting"),
+  workersSetting: document.querySelector("#workersSetting"),
+  timezoneSetting: document.querySelector("#timezoneSetting"),
   toast: document.querySelector("#toast"),
 };
 
@@ -42,7 +50,7 @@ function showToast(message) {
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => {
     els.toast.hidden = true;
-  }, 4600);
+  }, 4200);
 }
 
 function escapeHtml(value) {
@@ -130,8 +138,8 @@ function countLines(section, keywords) {
 
 function classifyEmail(email) {
   const text = `${email.subject} ${email.sender} ${email.snippet}`;
-  if (/风险|异常|支付|付款|安全|验证码|账单|IB|OpenAI/i.test(text)) return ["风险", "risk"];
-  if (/审稿|邀请|deadline|截止|会议|重要|Policy|Submission/i.test(text)) return ["重要", "important"];
+  if (/风险|异常|支付|付款|安全|验证码|账单|投诉|逾期|OpenAI|IB/i.test(text)) return ["风险", "risk"];
+  if (/审核|邀请|deadline|截止|会议|重要|Policy|Submission|合同|报价/i.test(text)) return ["重要", "important"];
   return ["通知", ""];
 }
 
@@ -140,10 +148,12 @@ function renderResult(result) {
   state.selectedIndex = 0;
   state.showingMarkdown = false;
 
-  els.emailCount.textContent = result.email_count ?? result.emails?.length ?? "-";
-  els.importantCount.textContent = countLines(result.sections?.important, ["|", "-", "邮件", "邀请", "更新"]) || "-";
-  els.taskCount.textContent = countLines(result.sections?.tasks, ["|", "-", "任务", "高", "中"]) || "-";
-  els.riskCount.textContent = /无高风险|暂无|无风险/.test(result.sections?.risks || "") ? "0" : countLines(result.sections?.risks, ["-", "风险", "异常"]) || "0";
+  els.emailCount.textContent = result.email_count ?? result.emails?.length ?? els.emailCount.textContent ?? "-";
+  els.accountCount.textContent = result.account_count ?? state.status?.mail?.count ?? result.accounts?.length ?? "-";
+  els.taskCount.textContent = countLines(result.sections?.tasks, ["|", "-", "任务", "高", "中", "回复", "确认"]) || "-";
+  els.riskCount.textContent = /无高风险|暂无|无风险/.test(result.sections?.risks || "")
+    ? "0"
+    : countLines(result.sections?.risks, ["-", "风险", "异常", "逾期"]) || "0";
   els.savedPath.textContent = result.output_path ? `已保存 ${result.output_path}` : "已生成";
   els.subtitle.textContent = result.email_count == null
     ? `${result.date || "最近"} 的已保存简报。点击按钮可重新读取邮件。`
@@ -163,7 +173,7 @@ function renderResult(result) {
 
 function renderRows(emails) {
   if (!emails.length) {
-    els.emailRows.innerHTML = '<tr><td colspan="4" class="empty-row">没有读取到当天邮件。</td></tr>';
+    els.emailRows.innerHTML = '<tr><td colspan="5" class="empty-row">没有读取到当天邮件。</td></tr>';
     return;
   }
   els.emailRows.innerHTML = emails
@@ -172,6 +182,7 @@ function renderRows(emails) {
       const selected = index === state.selectedIndex ? "selected" : "";
       const time = email.sent_at ? new Date(email.sent_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "-";
       return `<tr class="${selected}" data-index="${index}">
+        <td><div class="sender">${escapeHtml(email.account || "未知账号")}</div></td>
         <td><div class="sender">${escapeHtml(email.sender || "未知")}</div></td>
         <td><div class="subject">${escapeHtml(email.subject || "无主题")}</div></td>
         <td>${escapeHtml(time)}</td>
@@ -192,6 +203,7 @@ function renderSelectedEmail() {
   els.selectedEmail.className = "selected-email";
   els.selectedEmail.innerHTML = `<h4>${escapeHtml(email.subject || "无主题")}</h4>
     <dl>
+      <dt>邮箱账号</dt><dd>${escapeHtml(email.account || "未知账号")}</dd>
       <dt>发件人</dt><dd>${escapeHtml(email.sender || "未知")}</dd>
       <dt>时间</dt><dd>${escapeHtml(email.sent_at ? new Date(email.sent_at).toLocaleString("zh-CN") : "未知")}</dd>
       <dt>内容片段</dt><dd>${escapeHtml(email.snippet || "无正文")}</dd>
@@ -199,19 +211,35 @@ function renderSelectedEmail() {
 }
 
 function renderSuggestedReply() {
-  const markdown = state.result?.markdown || "";
-  const match = markdown.match(/建议回复\s*(?:\n|：|:)([\s\S]*)$/);
-  const text = match ? match[1].trim() : "没有识别到需要回复的邮件。";
+  const text = state.result?.sections?.reply || "没有识别到需要回复的邮件。";
   els.suggestedReply.className = "rich-text";
   els.suggestedReply.innerHTML = markdownToHtml(text);
+}
+
+function renderSettings(status) {
+  const accounts = status.mail?.accounts || [];
+  els.accountList.innerHTML = accounts.length
+    ? accounts.map((account) => `<article>
+        <strong>${escapeHtml(account.label || account.address)}</strong>
+        <span>${escapeHtml(account.address)} · ${escapeHtml(account.host)} · ${escapeHtml(account.mailbox)}</span>
+      </article>`).join("")
+    : `<p class="empty">还没有配置邮箱账号。</p>`;
+  els.aiSetting.textContent = status.ai?.configured ? "已配置" : "未配置";
+  els.maxEmailsSetting.textContent = status.agent?.max_emails ?? "-";
+  els.workersSetting.textContent = status.agent?.fetch_workers ?? "-";
+  els.timezoneSetting.textContent = status.agent?.timezone ?? "-";
 }
 
 async function loadStatus() {
   const response = await fetch("/api/status");
   const status = await response.json();
-  els.mailStatus.textContent = status.mail.configured ? `QQ邮箱已连接 ${status.mail.address}` : "QQ邮箱未配置";
-  els.modelStatus.textContent = status.ai.configured ? `阿里模型 ${status.ai.model}` : "模型未配置";
-  els.statusDot.classList.toggle("ready", Boolean(status.mail.configured && status.ai.configured));
+  state.status = status;
+  const accountCount = status.mail?.count || 0;
+  els.mailStatus.textContent = status.mail?.configured ? `已连接 ${accountCount} 个邮箱` : "邮箱未配置";
+  els.modelStatus.textContent = status.ai?.configured ? "AI 简报已配置" : "AI 简报未配置";
+  els.accountCount.textContent = accountCount || "-";
+  els.statusDot.classList.toggle("ready", Boolean(status.mail?.configured && status.ai?.configured));
+  renderSettings(status);
 }
 
 async function loadLatest() {
@@ -227,7 +255,7 @@ async function summarize(event) {
   event.preventDefault();
   els.runButton.disabled = true;
   els.runButton.textContent = "生成中...";
-  showToast("正在读取邮件并生成简报，可能需要几十秒。");
+  showToast("正在并发读取所有邮箱并生成简报。");
   try {
     const response = await fetch("/api/summarize", {
       method: "POST",
@@ -247,6 +275,16 @@ async function summarize(event) {
     els.runButton.disabled = false;
     els.runButton.textContent = "生成今日简报";
   }
+}
+
+function openSettings() {
+  els.settingsDrawer.hidden = false;
+  els.settingsButton.classList.add("active");
+}
+
+function closeSettings() {
+  els.settingsDrawer.hidden = true;
+  els.settingsButton.classList.remove("active");
 }
 
 els.form.addEventListener("submit", summarize);
@@ -272,6 +310,20 @@ els.markdownToggle.addEventListener("click", () => {
     renderSelectedEmail();
   }
 });
+els.settingsButton.addEventListener("click", openSettings);
+els.settingsDrawer.addEventListener("click", (event) => {
+  if (event.target.matches("[data-close-settings]")) closeSettings();
+});
+document.querySelectorAll(".nav-item[data-target]").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    document.querySelector(`#${button.dataset.target}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
 
 els.dateInput.value = todayIso();
-Promise.all([loadStatus(), loadLatest()]).catch((error) => showToast(error.message));
+(async function boot() {
+  await loadStatus();
+  await loadLatest();
+})().catch((error) => showToast(error.message));

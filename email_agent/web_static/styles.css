@@ -342,6 +342,10 @@ input {
   max-height: 360px;
 }
 
+.table-wrap table {
+  min-width: 760px;
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
@@ -423,6 +427,18 @@ tbody tr.selected {
   cursor: pointer;
 }
 
+.icon-button {
+  border: 1px solid var(--line);
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
 .selected-email {
   min-height: 250px;
   border-bottom: 1px solid var(--line);
@@ -463,6 +479,99 @@ tbody tr.selected {
   background: #1d252c;
   box-shadow: var(--shadow);
   font-size: 14px;
+}
+
+.settings-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 24, 31, 0.28);
+}
+
+.drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(420px, 100%);
+  height: 100%;
+  background: #fff;
+  border-left: 1px solid var(--line);
+  box-shadow: -20px 0 50px rgba(32, 46, 54, 0.14);
+  padding: 20px;
+  overflow: auto;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+}
+
+.drawer-head h3,
+.settings-section h4 {
+  margin: 0;
+}
+
+.drawer-head p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-section {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.account-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.account-list article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfc;
+}
+
+.account-list strong,
+.account-list span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.account-list span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-list {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px 14px;
+  margin: 12px 0 0;
+  font-size: 14px;
+}
+
+.settings-list dt {
+  color: var(--muted);
+}
+
+.settings-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1120px) {

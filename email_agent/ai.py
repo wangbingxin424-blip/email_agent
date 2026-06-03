@@ -18,9 +18,10 @@ def build_user_prompt(emails: list[EmailItem], target_date: date) -> str:
     if not emails:
         return f"{target_date.isoformat()} 没有可总结的邮件。请直接说明当天没有可总结邮件。"
 
+    accounts = sorted({item.account for item in emails if item.account})
     chunks = [
         f"请总结 {target_date.isoformat()} 的邮件。输出结构必须包含：",
-        "1. 今日总览：3-5句话概括今天邮件里发生了什么。",
+        "1. 今日总览：3-5 句话概括今天邮件里发生了什么。",
         "2. 重要事项：列出最重要的邮件事件，说明发件人、主题、核心内容、影响。",
         "3. 待办任务：提取需要我处理、回复、确认、提交、参加的事项，并标注优先级。",
         "4. 会议与日程：提取会议、截止时间、预约、时间地点等信息。",
@@ -29,6 +30,7 @@ def build_user_prompt(emails: list[EmailItem], target_date: date) -> str:
         "7. 建议回复：如果有需要回复的邮件，给出简短回复建议，但不要自动发送。",
         "",
         f"邮件数量：{len(emails)}",
+        f"邮箱账号：{', '.join(accounts) if accounts else '未标注'}",
     ]
 
     for index, item in enumerate(emails, start=1):
@@ -37,13 +39,14 @@ def build_user_prompt(emails: list[EmailItem], target_date: date) -> str:
             [
                 "",
                 f"--- 邮件 {index} ---",
+                f"账号: {item.account or '未知账号'}",
                 f"UID: {item.uid}",
                 f"发件人: {item.sender or '未知'}",
                 f"收件人: {item.recipients or '未知'}",
                 f"时间: {sent}",
                 f"主题: {item.subject or '无主题'}",
                 "正文:",
-                item.compact_body(),
+                item.compact_body(1600),
             ]
         )
 
@@ -62,6 +65,7 @@ class OpenAISummarizer:
                 {"role": "user", "content": build_user_prompt(emails, target_date)},
             ],
             "temperature": 0.2,
+            "max_tokens": self.config.max_tokens,
         }
         request = urllib.request.Request(
             f"{self.config.base_url}/chat/completions",
@@ -73,13 +77,13 @@ class OpenAISummarizer:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:
+            with urllib.request.urlopen(request, timeout=90) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"OpenAI API request failed with HTTP {exc.code}: {detail}") from exc
+            raise RuntimeError(f"AI API request failed with HTTP {exc.code}: {detail}") from exc
         except urllib.error.URLError as exc:
-            raise RuntimeError(f"OpenAI API request failed: {exc}") from exc
+            raise RuntimeError(f"AI API request failed: {exc}") from exc
 
         choices = data.get("choices")
         if isinstance(choices, list) and choices:
@@ -87,4 +91,4 @@ class OpenAISummarizer:
             content = message.get("content")
             if isinstance(content, str) and content.strip():
                 return content.strip()
-        raise RuntimeError("OpenAI API response did not contain summary text.")
+        raise RuntimeError("AI API response did not contain summary text.")

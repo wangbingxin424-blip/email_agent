@@ -1,20 +1,15 @@
 # email_agent
 
-本地邮件总结 agent。当前先支持 QQ 邮箱：读取指定日期的邮件内容，然后调用 OpenAI 兼容的 Chat Completions 接口生成中文日报，告诉你当天主要发生了什么。可以使用 OpenAI，也可以使用阿里云 DashScope 兼容模式。
+本地邮件简报 Agent。它会只读读取当天邮件，并调用 OpenAI 兼容的 Chat Completions 接口生成中文简报，帮助你快速知道今天主要发生了什么。
 
 ## 功能
 
-- 读取 QQ 邮箱 IMAP 邮件
-- 默认总结今天的邮件，也可以指定日期
-- 提取重要事项、待办任务、会议日程、风险异常和建议回复
-- 输出到终端，同时保存为 Markdown 文件
-- 代码结构预留了其他邮箱 provider，后续可加 Gmail、Outlook、163 等
-
-## 准备 QQ 邮箱授权码
-
-QQ 邮箱不能直接用登录密码读取 IMAP。你需要在 QQ 邮箱网页端开启 IMAP/SMTP 服务，并生成授权码。
-
-通常路径是：QQ 邮箱设置 -> 账号 -> POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV 服务 -> 开启 IMAP/SMTP 服务 -> 生成授权码。
+- 支持 QQ 邮箱，也支持任意提供 IMAP 的邮箱。
+- 支持一次读取多个邮箱账号。
+- 多邮箱并发读取，IMAP 批量拉取邮件，减少等待时间。
+- 可生成今日总览、重要事项、待办任务、会议日程、风险异常和建议回复。
+- 提供命令行和本地可视化网页。
+- 输出会保存为 Markdown 文件。
 
 ## 配置
 
@@ -24,107 +19,42 @@ QQ 邮箱不能直接用登录密码读取 IMAP。你需要在 QQ 邮箱网页�
 Copy-Item .env.example .env.local
 ```
 
-编辑 `.env.local`，填入：
+最小配置：
 
 ```env
 OPENAI_API_KEY=你的API Key
+OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+OPENAI_MODEL=qwen-plus
+
 QQ_EMAIL_ADDRESS=你的QQ邮箱地址
 QQ_EMAIL_AUTH_CODE=你的QQ邮箱授权码
 ```
 
-阿里云 DashScope 推荐配置：
+QQ 邮箱不能直接用登录密码读取 IMAP。需要在 QQ 邮箱网页端开启 IMAP/SMTP 服务，并生成授权码。
+
+## 多邮箱
+
+如果要一次读取多个邮箱，请在 `.env.local` 使用 `EMAIL_ACCOUNT_N_*`：
 
 ```env
-OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-OPENAI_MODEL=qwen-plus
+EMAIL_ACCOUNT_1_LABEL=我的QQ邮箱
+EMAIL_ACCOUNT_1_ADDRESS=you@qq.com
+EMAIL_ACCOUNT_1_AUTH_CODE=邮箱授权码
+EMAIL_ACCOUNT_1_IMAP_HOST=imap.qq.com
+EMAIL_ACCOUNT_1_IMAP_PORT=993
+EMAIL_ACCOUNT_1_MAILBOX=INBOX
+
+EMAIL_ACCOUNT_2_LABEL=客户邮箱
+EMAIL_ACCOUNT_2_ADDRESS=client@example.com
+EMAIL_ACCOUNT_2_AUTH_CODE=邮箱授权码
+EMAIL_ACCOUNT_2_IMAP_HOST=imap.example.com
+EMAIL_ACCOUNT_2_IMAP_PORT=993
+EMAIL_ACCOUNT_2_MAILBOX=INBOX
 ```
 
-OpenAI 官方接口配置：
+只要配置了 `EMAIL_ACCOUNT_1_ADDRESS`，程序就会读取账号列表，而不是单独的 `QQ_EMAIL_*` 配置。
 
-```env
-OPENAI_MODEL=gpt-4.1-mini
-OPENAI_BASE_URL=https://api.openai.com/v1
-```
-
-其他可选项：
-
-```env
-EMAIL_AGENT_TIMEZONE=Asia/Shanghai
-EMAIL_AGENT_MAX_EMAILS=80
-```
-
-## 运行
-
-如果你本机已有 Python 3.10+：
-
-```powershell
-python -m pip install -e .
-python -m email_agent summarize --date today
-```
-
-## 使用 Docker 运行
-
-构建镜像：
-
-```powershell
-docker build -t email-agent .
-```
-
-使用 `.env.local` 运行今天的邮件总结：
-
-```powershell
-docker run --rm --env-file .env.local -v "${PWD}/outputs:/app/outputs" email-agent
-```
-
-指定日期：
-
-```powershell
-docker run --rm --env-file .env.local -v "${PWD}/outputs:/app/outputs" email-agent summarize --date 2026-06-03
-```
-
-只读取邮件、不调用 AI：
-
-```powershell
-docker run --rm --env-file .env.local -v "${PWD}/outputs:/app/outputs" email-agent summarize --date today --no-ai
-```
-
-启动可视化网站：
-
-```powershell
-docker run --rm --env-file .env.local -p 8765:8765 -v "${PWD}/outputs:/app/outputs" email-agent web --host 0.0.0.0 --port 8765
-```
-
-然后打开：
-
-```text
-http://127.0.0.1:8765
-```
-
-如果 `python` 命令不可用，也可以用可用的 Python 解释器运行：
-
-```powershell
-<python.exe路径> -m email_agent summarize --date today
-```
-
-指定日期：
-
-```powershell
-python -m email_agent summarize --date 2026-06-03
-```
-
-只读取邮件、不调用 AI：
-
-```powershell
-python -m email_agent summarize --date today --no-ai
-```
-
-不保存 Markdown 文件：
-
-```powershell
-python -m email_agent summarize --date today --no-save
-```
-
-## 启动可视化网站
+## 本地网页
 
 ```powershell
 python -m email_agent web --port 8765
@@ -136,28 +66,66 @@ python -m email_agent web --port 8765
 http://127.0.0.1:8765
 ```
 
-网页中可以选择日期、生成简报、查看待办任务、风险异常、邮件列表和原始 Markdown。
+网页里可以选择日期、生成简报、查看邮件列表、查看原始 Markdown，并在设置面板检查邮箱和 AI 配置状态。设置面板不会展示密钥或授权码。
 
-## 输出结构
+## 命令行
 
-AI 简报会包含：
+安装开发包：
 
-- 今日总览
-- 重要事项
-- 待办任务
-- 会议与日程
-- 风险与异常
-- 可忽略信息
-- 建议回复
+```powershell
+python -m pip install -e .
+```
 
-默认保存到：
+生成今天的简报：
 
-```text
-outputs/email-summary-YYYY-MM-DD.md
+```powershell
+python -m email_agent summarize --date today
+```
+
+只读取邮件，不调用 AI：
+
+```powershell
+python -m email_agent summarize --date today --no-ai
+```
+
+指定日期：
+
+```powershell
+python -m email_agent summarize --date 2026-06-03
+```
+
+## Docker
+
+构建镜像：
+
+```powershell
+docker build -t email-agent .
+```
+
+运行网页：
+
+```powershell
+docker run --rm --env-file .env.local -p 8765:8765 -v "${PWD}/outputs:/app/outputs" email-agent web --host 0.0.0.0 --port 8765
+```
+
+运行命令行简报：
+
+```powershell
+docker run --rm --env-file .env.local -v "${PWD}/outputs:/app/outputs" email-agent summarize --date today
+```
+
+## 可调参数
+
+```env
+EMAIL_AGENT_TIMEZONE=Asia/Shanghai
+EMAIL_AGENT_MAX_EMAILS=80
+EMAIL_AGENT_FETCH_WORKERS=4
+EMAIL_AGENT_OUTPUT_DIR=outputs
+OPENAI_MAX_TOKENS=1800
 ```
 
 ## 安全说明
 
 - `.env.local` 和 `.env` 已加入 `.gitignore`，不要把 API Key 或邮箱授权码提交到 GitHub。
-- 程序只读取邮件，不会自动发送、删除、移动邮件。
+- 程序只读取邮件，不会自动发送、删除或移动邮件。
 - 邮件正文会发送到你配置的 OpenAI 兼容接口用于总结，请确认你接受该数据流向。

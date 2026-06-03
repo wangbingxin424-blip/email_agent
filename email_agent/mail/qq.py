@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import imaplib
+import re
 from datetime import date, datetime, time, timedelta
+from typing import Iterable
 
 from email_agent.config import MailConfig
 from email_agent.mail.parser import parse_email
@@ -9,10 +11,16 @@ from email_agent.models import EmailItem
 
 
 IMAP_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+UID_PATTERN = re.compile(rb"\bUID\s+(\d+)\b", re.IGNORECASE)
 
 
 def format_imap_date(value: datetime) -> str:
     return f"{value.day:02d}-{IMAP_MONTHS[value.month - 1]}-{value.year}"
+
+
+def chunked(values: list[bytes], size: int) -> Iterable[list[bytes]]:
+    for index in range(0, len(values), size):
+        yield values[index : index + size]
 
 
 class QQMailClient:
@@ -30,32 +38,40 @@ class QQMailClient:
             imap.select(self.config.mailbox, readonly=True)
             status, data = imap.uid("SEARCH", None, f'(SINCE "{since}" BEFORE "{before}")')
             if status != "OK":
-                raise RuntimeError(f"IMAP search failed: {status}")
+                raise RuntimeError(f"IMAP search failed for {self.config.address}: {status}")
 
             uids = data[0].split()
             selected = list(reversed(uids))[:limit]
             emails: list[EmailItem] = []
 
-            for raw_uid in reversed(selected):
-                uid = raw_uid.decode("ascii", errors="replace")
-                status, fetched = imap.uid("FETCH", raw_uid, "(RFC822 INTERNALDATE)")
+            for uid_group in chunked(list(reversed(selected)), 20):
+                uid_set = b",".join(uid_group).decode("ascii", errors="replace")
+                status, fetched = imap.uid("FETCH", uid_set, "(UID RFC822)")
                 if status != "OK" or not fetched:
                     continue
-                raw_message = self._extract_rfc822(fetched)
-                if not raw_message:
-                    continue
-                item = parse_email(raw_message, uid=uid)
-                if self._belongs_to_date(item, target_date, tz):
-                    emails.append(item)
+                for uid, raw_message in self._iter_fetched_messages(fetched):
+                    item = parse_email(
+                        raw_message,
+                        uid=uid,
+                        account=self.config.address,
+                        provider=self.config.provider,
+                    )
+                    if self._belongs_to_date(item, target_date, tz):
+                        emails.append(item)
 
             return emails
 
     @staticmethod
-    def _extract_rfc822(fetched) -> bytes | None:
+    def _iter_fetched_messages(fetched) -> Iterable[tuple[str, bytes]]:
+        fallback_index = 0
         for part in fetched:
-            if isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], bytes):
-                return part[1]
-        return None
+            if not (isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], bytes)):
+                continue
+            meta = part[0] if isinstance(part[0], bytes) else b""
+            match = UID_PATTERN.search(meta)
+            uid = match.group(1).decode("ascii", errors="replace") if match else f"unknown-{fallback_index}"
+            fallback_index += 1
+            yield uid, part[1]
 
     @staticmethod
     def _belongs_to_date(item: EmailItem, target_date: date, tz) -> bool:
