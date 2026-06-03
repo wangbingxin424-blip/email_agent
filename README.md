@@ -50,6 +50,32 @@ python -m pip install -e .
 python -m email_agent summarize --date today
 ```
 
+## 使用 Docker 运行
+
+构建镜像：
+
+```powershell
+docker build -t email-agent .
+```
+
+使用 `.env.local` 运行今天的邮件总结：
+
+```powershell
+docker run --rm --env-file .env.local -v "${PWD}/outputs:/app/outputs" email-agent
+```
+
+指定日期：
+
+```powershell
+docker run --rm --env-file .env.local -v "${PWD}/outputs:/app/outputs" email-agent summarize --date 2026-06-03
+```
+
+只读取邮件、不调用 AI：
+
+```powershell
+docker run --rm --env-file .env.local -v "${PWD}/outputs:/app/outputs" email-agent summarize --date today --no-ai
+```
+
 如果 `python` 命令不可用，也可以用可用的 Python 解释器运行：
 
 ```powershell
