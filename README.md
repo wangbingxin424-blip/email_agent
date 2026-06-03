@@ -4,8 +4,9 @@
 
 ## 功能
 
-- 支持 QQ 邮箱，也支持任意提供 IMAP 的邮箱。
+- 支持 QQ 邮箱、网易 163/126/yeah.net 邮箱，也支持自定义 IMAP。
 - 支持一次读取多个邮箱账号。
+- 可以在本地网页的设置面板新增邮箱。
 - 多邮箱并发读取，IMAP 批量拉取邮件，减少等待时间。
 - 可生成今日总览、重要事项、待办任务、会议日程、风险异常和建议回复。
 - 提供命令行和本地可视化网页。
@@ -34,20 +35,22 @@ QQ 邮箱不能直接用登录密码读取 IMAP。需要在 QQ 邮箱网页端�
 
 ## 多邮箱
 
-如果要一次读取多个邮箱，请在 `.env.local` 使用 `EMAIL_ACCOUNT_N_*`：
+如果要一次读取多个邮箱，可以直接在网页设置面板添加 QQ 或网易邮箱。也可以手动在 `.env.local` 使用 `EMAIL_ACCOUNT_N_*`：
 
 ```env
 EMAIL_ACCOUNT_1_LABEL=我的QQ邮箱
 EMAIL_ACCOUNT_1_ADDRESS=you@qq.com
 EMAIL_ACCOUNT_1_AUTH_CODE=邮箱授权码
+EMAIL_ACCOUNT_1_PROVIDER=qq
 EMAIL_ACCOUNT_1_IMAP_HOST=imap.qq.com
 EMAIL_ACCOUNT_1_IMAP_PORT=993
 EMAIL_ACCOUNT_1_MAILBOX=INBOX
 
 EMAIL_ACCOUNT_2_LABEL=客户邮箱
-EMAIL_ACCOUNT_2_ADDRESS=client@example.com
+EMAIL_ACCOUNT_2_ADDRESS=client@163.com
 EMAIL_ACCOUNT_2_AUTH_CODE=邮箱授权码
-EMAIL_ACCOUNT_2_IMAP_HOST=imap.example.com
+EMAIL_ACCOUNT_2_PROVIDER=163
+EMAIL_ACCOUNT_2_IMAP_HOST=imap.163.com
 EMAIL_ACCOUNT_2_IMAP_PORT=993
 EMAIL_ACCOUNT_2_MAILBOX=INBOX
 ```
@@ -66,7 +69,7 @@ python -m email_agent web --port 8765
 http://127.0.0.1:8765
 ```
 
-网页里可以选择日期、生成简报、查看邮件列表、查看原始 Markdown，并在设置面板检查邮箱和 AI 配置状态。设置面板不会展示密钥或授权码。
+网页里可以选择日期、生成简报、查看邮件列表、查看原始 Markdown，也可以在设置面板新增 QQ / 网易邮箱。新增后，下一次生成简报会同时读取所有已添加邮箱。
 
 ## 命令行
 

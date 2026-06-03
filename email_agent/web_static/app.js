@@ -30,11 +30,23 @@ const els = {
   settingsButton: document.querySelector("#settingsButton"),
   settingsDrawer: document.querySelector("#settingsDrawer"),
   accountList: document.querySelector("#accountList"),
-  aiSetting: document.querySelector("#aiSetting"),
-  maxEmailsSetting: document.querySelector("#maxEmailsSetting"),
-  workersSetting: document.querySelector("#workersSetting"),
-  timezoneSetting: document.querySelector("#timezoneSetting"),
+  accountSummary: document.querySelector("#accountSummary"),
+  addAccountForm: document.querySelector("#addAccountForm"),
+  addAccountButton: document.querySelector("#addAccountButton"),
+  providerInput: document.querySelector("#providerInput"),
+  labelInput: document.querySelector("#labelInput"),
+  addressInput: document.querySelector("#addressInput"),
+  authCodeInput: document.querySelector("#authCodeInput"),
   toast: document.querySelector("#toast"),
+};
+
+const providerNames = {
+  qq: "QQ邮箱",
+  "163": "网易163",
+  "126": "网易126",
+  yeah: "网易yeah.net",
+  custom: "自定义IMAP",
+  imap: "IMAP",
 };
 
 function todayIso() {
@@ -218,16 +230,14 @@ function renderSuggestedReply() {
 
 function renderSettings(status) {
   const accounts = status.mail?.accounts || [];
+  els.accountSummary.textContent = accounts.length ? `${accounts.length} 个邮箱` : "未配置";
   els.accountList.innerHTML = accounts.length
     ? accounts.map((account) => `<article>
         <strong>${escapeHtml(account.label || account.address)}</strong>
-        <span>${escapeHtml(account.address)} · ${escapeHtml(account.host)} · ${escapeHtml(account.mailbox)}</span>
+        <span>${escapeHtml(providerNames[account.provider] || account.provider || "IMAP")} · ${escapeHtml(account.address)}</span>
+        <small>${escapeHtml(account.host)} · ${escapeHtml(account.mailbox)}</small>
       </article>`).join("")
     : `<p class="empty">还没有配置邮箱账号。</p>`;
-  els.aiSetting.textContent = status.ai?.configured ? "已配置" : "未配置";
-  els.maxEmailsSetting.textContent = status.agent?.max_emails ?? "-";
-  els.workersSetting.textContent = status.agent?.fetch_workers ?? "-";
-  els.timezoneSetting.textContent = status.agent?.timezone ?? "-";
 }
 
 async function loadStatus() {
@@ -277,6 +287,39 @@ async function summarize(event) {
   }
 }
 
+async function addAccount(event) {
+  event.preventDefault();
+  els.addAccountButton.disabled = true;
+  els.addAccountButton.textContent = "添加中...";
+  try {
+    const payload = {
+      provider: els.providerInput.value,
+      label: els.labelInput.value.trim(),
+      address: els.addressInput.value.trim(),
+      auth_code: els.authCodeInput.value.trim(),
+    };
+    const response = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || "添加失败");
+    state.status = data.status;
+    renderSettings(data.status);
+    els.mailStatus.textContent = `已连接 ${data.status.mail.count} 个邮箱`;
+    els.accountCount.textContent = data.status.mail.count || "-";
+    els.statusDot.classList.toggle("ready", Boolean(data.status.mail.configured && data.status.ai.configured));
+    els.addAccountForm.reset();
+    showToast("邮箱已添加，下一次生成简报会一起读取。");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    els.addAccountButton.disabled = false;
+    els.addAccountButton.textContent = "添加邮箱";
+  }
+}
+
 function openSettings() {
   els.settingsDrawer.hidden = false;
   els.settingsButton.classList.add("active");
@@ -288,6 +331,7 @@ function closeSettings() {
 }
 
 els.form.addEventListener("submit", summarize);
+els.addAccountForm.addEventListener("submit", addAccount);
 els.todayButton.addEventListener("click", () => {
   els.dateInput.value = todayIso();
 });
@@ -326,4 +370,7 @@ els.dateInput.value = todayIso();
 (async function boot() {
   await loadStatus();
   await loadLatest();
+  if (window.location.hash === "#settings" || new URLSearchParams(window.location.search).get("panel") === "settings") {
+    openSettings();
+  }
 })().catch((error) => showToast(error.message));

@@ -31,6 +31,15 @@ IMAP_HOST_BY_DOMAIN = {
 }
 
 
+PROVIDER_HOSTS = {
+    "qq": "imap.qq.com",
+    "163": "imap.163.com",
+    "126": "imap.126.com",
+    "yeah": "imap.yeah.net",
+    "custom": "",
+}
+
+
 def is_placeholder(value: str) -> bool:
     return value.strip() in PLACEHOLDER_VALUES
 
@@ -69,6 +78,26 @@ def _get_int(name: str, default: int) -> int:
 def guess_imap_host(address: str) -> str:
     domain = address.rsplit("@", 1)[-1].lower()
     return IMAP_HOST_BY_DOMAIN.get(domain, f"imap.{domain}")
+
+
+def guess_provider(address: str) -> str:
+    domain = address.rsplit("@", 1)[-1].lower()
+    if domain in {"qq.com", "vip.qq.com"}:
+        return "qq"
+    if domain == "163.com":
+        return "163"
+    if domain == "126.com":
+        return "126"
+    if domain == "yeah.net":
+        return "yeah"
+    return "custom"
+
+
+def host_for_provider(provider: str, address: str, custom_host: str = "") -> str:
+    provider = (provider or guess_provider(address)).strip().lower()
+    if provider == "custom" and custom_host.strip():
+        return custom_host.strip()
+    return PROVIDER_HOSTS.get(provider) or guess_imap_host(address)
 
 
 @dataclass(frozen=True)

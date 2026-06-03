@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from email_agent.accounts import add_mail_account
 from email_agent.ai import OpenAISummarizer
 from email_agent.cli import parse_target_date, render_email_listing, save_markdown
 from email_agent.config import AgentConfig, MailConfig, OpenAIConfig, load_env_files
@@ -81,8 +81,7 @@ def summarize_for_date(date_value: str, no_ai: bool = False) -> dict:
         "emails": [email_to_dict(item) for item in emails],
         "output_path": str(output_path),
     }
-    sidecar_path = output_path.with_suffix(".json")
-    sidecar_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    output_path.with_suffix(".json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
 
 
@@ -92,6 +91,7 @@ def latest_summary() -> dict:
     files = sorted(agent_config.output_dir.glob("email-summary-*.md"), key=lambda item: item.stat().st_mtime, reverse=True)
     if not files:
         return {"found": False}
+
     path = files[0]
     sidecar_path = path.with_suffix(".json")
     if sidecar_path.exists():
@@ -158,7 +158,7 @@ def config_status() -> dict:
 
 
 class EmailAgentHandler(BaseHTTPRequestHandler):
-    server_version = "EmailAgent/0.2"
+    server_version = "EmailAgent/0.3"
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -181,6 +181,9 @@ class EmailAgentHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/accounts":
+            self.add_account()
+            return
         if parsed.path != "/api/summarize":
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
             return
@@ -191,6 +194,15 @@ class EmailAgentHandler(BaseHTTPRequestHandler):
             self.write_json(result)
         except Exception as exc:
             self.write_json({"error": str(exc)}, status=500)
+
+    def add_account(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            account = add_mail_account(payload)
+            self.write_json({"ok": True, "account": account, "status": config_status()})
+        except Exception as exc:
+            self.write_json({"error": str(exc)}, status=400)
 
     def write_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

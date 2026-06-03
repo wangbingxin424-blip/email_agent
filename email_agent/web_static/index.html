@@ -142,29 +142,46 @@
       <div class="drawer-backdrop" data-close-settings></div>
       <section class="drawer-panel" aria-label="设置">
         <div class="drawer-head">
-          <div>
-            <h3>设置</h3>
-            <p>这里只显示配置状态，不展示密钥或授权码。</p>
-          </div>
+          <h3>设置</h3>
           <button type="button" class="icon-button" data-close-settings aria-label="关闭设置">×</button>
         </div>
+
         <div class="settings-section">
-          <h4>邮箱账号</h4>
+          <div class="section-title">
+            <h4>邮箱账号</h4>
+            <span id="accountSummary">-</span>
+          </div>
           <div id="accountList" class="account-list"></div>
         </div>
-        <div class="settings-section">
-          <h4>运行参数</h4>
-          <dl class="settings-list">
-            <dt>AI 简报</dt>
-            <dd id="aiSetting">检查中</dd>
-            <dt>每账号读取上限</dt>
-            <dd id="maxEmailsSetting">-</dd>
-            <dt>并发读取数</dt>
-            <dd id="workersSetting">-</dd>
-            <dt>时区</dt>
-            <dd id="timezoneSetting">-</dd>
-          </dl>
-        </div>
+
+        <form id="addAccountForm" class="settings-section account-form">
+          <div class="section-title">
+            <h4>新增邮箱</h4>
+            <span>QQ / 网易</span>
+          </div>
+          <label>
+            <span>邮箱类型</span>
+            <select id="providerInput" name="provider">
+              <option value="qq">QQ 邮箱</option>
+              <option value="163">网易 163 邮箱</option>
+              <option value="126">网易 126 邮箱</option>
+              <option value="yeah">网易 yeah.net 邮箱</option>
+            </select>
+          </label>
+          <label>
+            <span>显示名称</span>
+            <input id="labelInput" name="label" type="text" placeholder="例如：客户邮箱" />
+          </label>
+          <label>
+            <span>邮箱地址</span>
+            <input id="addressInput" name="address" type="email" autocomplete="off" placeholder="name@example.com" required />
+          </label>
+          <label>
+            <span>授权码</span>
+            <input id="authCodeInput" name="auth_code" type="password" autocomplete="new-password" placeholder="IMAP 授权码" required />
+          </label>
+          <button class="primary full" type="submit" id="addAccountButton">添加邮箱</button>
+        </form>
       </section>
     </div>
 
